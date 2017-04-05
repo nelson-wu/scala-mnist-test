@@ -1,9 +1,12 @@
 package me.nelsonwu
 
-/**
- * Hello world!
- *
- */
-object App extends Application {
-  println( "Hello World!" )
+
+
+object App   {
+  def main(args: Array[String]): Unit ={
+    val loader = MnistLoader
+    val files = loader.MnistLoader.getMnistImageData(System.getProperty("user.dir"))
+
+
+  }
 }
