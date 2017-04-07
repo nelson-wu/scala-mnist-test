@@ -1,7 +1,5 @@
 package me.nelsonwu
 
-
-
 object App   {
   def main(args: Array[String]): Unit ={
     val loader = MnistLoader
