@@ -31,7 +31,7 @@ object MnistLoader {
       val trainingLabels = readLabels(s"$baseDirectory/train-labels-idx1-ubyte.gz")
       val testImages = readImages(s"$baseDirectory/t10k-images-idx3-ubyte.gz")
       val trainingImages = readImages(s"$baseDirectory/train-images-idx3-ubyte.gz")
-      (testLabels, trainingLabels, testImages, trainingImages)
+      (testLabels, trainingLabels, testImages.map(_.div(255)), trainingImages.map(_.div(255)))
     }
 
     /**
