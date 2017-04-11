@@ -1,7 +1,10 @@
 
 package me.nelsonwu
 
+import java.awt.image.DataBuffer
+
 import org.nd4j.linalg._
+import org.nd4j.linalg.api.buffer.util.DataTypeUtil
 import org.nd4j.linalg.api.ndarray.INDArray
 import org.nd4j.linalg.api.ops.impl.indexaccum.IMax
 import org.nd4j.linalg.cpu.nativecpu.NDArray
@@ -28,16 +31,24 @@ class Network(sizes: Vector[Int]) {
           .sub(Transforms.sigmoid(a))
       )
   }
-  def feedForward (input: IndexedSeq[INDArray], weights: IndexedSeq[INDArray], biases: IndexedSeq[INDArray], index: Int): IndexedSeq[INDArray] = {
-    match input {
-      case IndexedSeq() => IndexedSeq[INDArray]()
-      case _ => input ++ IndexedSeq(applyWeightBias(input.head, weights(index), biases(index))) ++ feedForward(input.tail, weights, biases, index + 1)
+  def feedForward (input: INDArray, weights: IndexedSeq[INDArray], biases: IndexedSeq[INDArray], index: Int): IndexedSeq[INDArray] = {
+
+    DataTypeUtil.setDTypeForContext("double")
+    var activations = IndexedSeq(input)
+    var newLayer = input
+    (weights zip biases).foreach{ case (w, b) =>
+      newLayer = Transforms.sigmoid(applyWeightBias(newLayer, w, b))
+      activations = activations ++ IndexedSeq(newLayer)
     }
+    activations
   }
 
   def costPrime (a: INDArray, y: INDArray) = a.sub(y)
 
-  def runNetwork (miniBatchSize: Int, eta: Double, epochs: Int): Unit = {
+  def runNetwork (miniBatchSize: Int, testBatchSize: Int, eta: Double, epochs: Int): Unit = {
+
+
+    DataTypeUtil.setDTypeForContext("double")
     val numLayers = sizes.length
 
     var biases, weights = IndexedSeq.empty[INDArray]
@@ -54,132 +65,141 @@ class Network(sizes: Vector[Int]) {
     val trainingSet = (dataSet._4 zip dataSet._2)
     val testSet = (dataSet._3 zip dataSet._1)
 
-    1 to epochs foreach { _ =>
+
+    System.out.println(" " + testNetwork(testSet) + " correct. ")
+
+    System.out.println("Finished loading data.")
+    1 to epochs foreach { i =>
+      System.out.println(s"Starting epoch $i.")
       Random.shuffle(trainingSet)
         .grouped(miniBatchSize)
         .foreach {batch =>
+          System.out.println(s" Starting new batch in epoch $i.")
           val returnTuple = updateBatch(batch, weights.toIndexedSeq, biases.toIndexedSeq, eta)
           weights = returnTuple._1
           biases = returnTuple._2
 
-          System.out.println("New weights and biases: " + weights + " " + biases)
-          System.out.println(testNetwork(testSet) + " correct. ")
+          //System.out.println(" " + testNetwork(testSet) + " correct. ")
+          //System.out.println("New weights and biases: " + weights + " " + biases)
+          //System.out.println(testNetwork(testSet) + " correct. ")
+          //System.out.println(" Weights: " + weights.take(1) + " Biases: " + biases.take(1))
+          //System.out.println(" " + testNetwork(testSet) + " correct. ")
         }
+      System.out.println
+      System.out.println(s"Ended epoch $i.")
       System.out.println(testNetwork(testSet) + " correct. ")
+      System.out.println
+      Thread.sleep(1000)
     }
 
     def testNetwork (testBatch: IndexedSeq[(INDArray, Int)]): Double = {
-        val results = testBatch.map{ case (image, number) =>
-          val lastRow = feedForward(IndexedSeq(image.transpose()), weights, biases, 0).last
-          val maxIndex = Nd4j.getExecutioner.execAndReturn(new IMax(lastRow)).getFinalResult
-          maxIndex == number
-        }
-        val correctCount = results.foldLeft(0) {
-          case (count, true) => count + 1
-          case (count, false) => count
-        }
-        correctCount / results.size
+
+      DataTypeUtil.setDTypeForContext("double")
+      val results = Random.shuffle(testBatch)
+          .take(testBatchSize)
+        .map{ case (image, number) =>
+        val lastRow = feedForward(image.transpose(), weights, biases, 0).last
+        val maxIndex = Nd4j.getExecutioner.execAndReturn(new IMax(lastRow)).getFinalResult
+          //System.out.println(s" $maxIndex, $number")
+        maxIndex == number
       }
+      val correctCount = results.foldLeft(0) {
+        case (count, true) => count + 1
+        case (count, false) => count
+      }
+      correctCount.toDouble / results.size.toDouble
+
+    }
   }
 
   //var z = (weights.zip(biases)).map(a => applyWeightBias(inputImageVec, a._1, a._2))
 
 
-def updateBatch(batch: IndexedSeq[(INDArray, Int)], weights: IndexedSeq[INDArray], biases: IndexedSeq[INDArray], eta: Double ): (IndexedSeq[INDArray], IndexedSeq[INDArray] ) = {
+  def updateBatch(batch: IndexedSeq[(INDArray, Int)], weights: IndexedSeq[INDArray], biases: IndexedSeq[INDArray], eta: Double ): (IndexedSeq[INDArray], IndexedSeq[INDArray] ) = {
 
-  val nabla_b  = IndexedSeq.tabulate(biases.length){ index =>
-  Nd4j.zerosLike(biases(index))
-}
-  val nabla_w  = IndexedSeq.tabulate(weights.length){index =>
-  Nd4j.zerosLike(weights(index))
-}
+    DataTypeUtil.setDTypeForContext("double")
+    val nabla_b  = IndexedSeq.tabulate(biases.length){ index =>
+      Nd4j.zerosLike(biases(index))
+    }
+    val nabla_w  = IndexedSeq.tabulate(weights.length){index =>
+      Nd4j.zerosLike(weights(index))
+    }
 
-  var newBias = biases
-  var newWeight = weights
+    var newBias = biases
+    var newWeight = weights
 
-  /*    var newWeight = List.tabulate(weights.length){index =>
-        Nd4j.zerosLike(weights(index))
+
+
+    batch.foreach{image =>
+      val (deltaNablaW, deltaNablaB) = processImage(image, weights, biases )
+/*
+      newBias = (newBias zip deltaNablaB).map{ case(nb, dnb) =>
+        nb.add(dnb)
+      }
+      newWeight = (newWeight zip deltaNablaW).map{ case (nw, dnw) =>
+        nw.add(dnw)
       }
 
-      var newBias = List.tabulate(biases.length) {index =>
-        Nd4j.zerosLike(biases(index))
+      */
+
+      newBias = (newBias zip deltaNablaB).map{ case (nb, dnb) =>
+        nb.sub(dnb.mul(eta).div(batch.size))
       }
-  */
 
-  batch.foreach{image =>
-  val (deltaNablaW, deltaNablaB) = processImage(image, weights, biases )
+      newWeight = (newWeight zip deltaNablaW).map{ case (nw, dnw) =>
+        nw.sub(dnw.mul(eta).div(batch.size))
+      }
 
-  /*val avgNablaB = (nabla_b zip deltaNablaB).map { case (a, b) =>
-    a.add(b)
+
+    }
+
+    (newWeight, newBias)
   }
-    .map(_.div(batch.length))
-
-  val avgNablaW = (nabla_w zip deltaNablaW).map { case (a, b) =>
-    a.add(b)
-  }
-    .map(_.div(batch.length))*/
-
-  /*  newBias = (newBias zip avgNablaB).map{ case (a, b) =>
-     a.sub(b.mul(eta))
-   }*/
-  newBias = (newBias zip deltaNablaB).map{ case (nb, dnb) =>
-  nb.add(dnb.div(batch.size))
-}
-
-  newWeight = (newWeight zip deltaNablaW).map{ case (nw, dnw) =>
-  nw.add(dnw.div(batch.size))
-}
-
-  /* newWeight = (newWeight zip avgNablaW).map{ case (a, b) =>
-    a.sub(b.mul(eta))
-  }*/
-}
-
-  (newWeight, newBias)
-}
 
   def processImage(image: (INDArray, Int), weights: IndexedSeq[INDArray], biases: IndexedSeq[INDArray] ): (IndexedSeq[INDArray], IndexedSeq[INDArray]) = {
-  var deltaNabla_b = IndexedSeq.empty[INDArray]
-  var deltaNabla_w = IndexedSeq.empty[INDArray]
 
-  var activations = IndexedSeq(image._1.transpose())
-  var zs = IndexedSeq(image._1)
-  var z = image._1.transpose()
+    DataTypeUtil.setDTypeForContext("double")
+    var deltaNabla_b = IndexedSeq.empty[INDArray]
+    var deltaNabla_w = IndexedSeq.empty[INDArray]
 
-  for (elem <- (weights zip biases)) {
-  z = applyWeightBias(z, elem._1, elem._2)
-  var activation = Transforms.sigmoid(z)
-  //activations.append(activation)
-  activations = activations ++ IndexedSeq(activation)
-  //zs.append(z)
-  zs = zs ++ IndexedSeq(z)
-}
+    var activations = IndexedSeq(image._1.transpose())
+    var zs = IndexedSeq(image._1)
+    var z = image._1.transpose()
 
-  val y = Nd4j.zeros(10, 1).putScalar(image._2, 1)
-  val cp = costPrime(activations.last, y)
-  val sp = sigmoidPrime(zs.last)
-  var delta = cp.mul(sp)
+    for (elem <- (weights zip biases)) {
+      z = applyWeightBias(z, elem._1, elem._2)
+      var activation = Transforms.sigmoid(z)
+      //activations.append(activation)
+      activations = activations ++ IndexedSeq(activation)
+      //zs.append(z)
+      zs = zs ++ IndexedSeq(z)
+    }
 
-  //deltaNabla_b.prepend(delta)
-  deltaNabla_b = deltaNabla_b ++ IndexedSeq(delta)
+    val y = Nd4j.zeros(10, 1).putScalar(image._2, 1)
+    val cp = costPrime(activations.last, y)
+    val sp = sigmoidPrime(zs.last)
+    var delta = cp.mul(sp)
 
-  //deltaNabla_w.prepend(delta.mul(activations(activations.length - 1).transpose()))
-  deltaNabla_w = IndexedSeq(delta.mmul(activations(activations.length - 2).transpose())) ++ deltaNabla_w
+    //deltaNabla_b.prepend(delta)
+    deltaNabla_b = deltaNabla_b ++ IndexedSeq(delta)
 
-  for (i <- 1.to(sizes.length - 2).reverse) {
-  val z = zs(i)
-  val sp = sigmoidPrime(z)
-  delta = weights(i)
-  .transpose()
-  .mmul(delta)
-  .mul(sp)
-  //deltaNabla_b.prepend(delta)
-  deltaNabla_b = IndexedSeq(delta) ++ deltaNabla_b
-  //deltaNabla_w.prepend(delta.mul(activations(activations.length - i - 1).transpose()))
-  deltaNabla_w = IndexedSeq(delta.mmul(activations(i-1).transpose())) ++ deltaNabla_w
-}
+    //deltaNabla_w.prepend(delta.mul(activations(activations.length - 1).transpose()))
+    deltaNabla_w = IndexedSeq(delta.mmul(activations(activations.length - 1).transpose())) ++ deltaNabla_w
 
-  (deltaNabla_w, deltaNabla_b)
-}
+    for (i <- 1.to(sizes.length - 2).reverse) {
+      val z = zs(i)
+      val sp = sigmoidPrime(z)
+      delta = weights(i)
+        .transpose()
+        .mmul(delta)
+        .mul(sp)
+      //deltaNabla_b.prepend(delta)
+      deltaNabla_b = IndexedSeq(delta) ++ deltaNabla_b
+      //deltaNabla_w.prepend(delta.mul(activations(activations.length - i - 1).transpose()))
+      deltaNabla_w = IndexedSeq(delta.mmul(activations(i-1).transpose())) ++ deltaNabla_w
+    }
+
+    (deltaNabla_w, deltaNabla_b)
+  }
 
 }

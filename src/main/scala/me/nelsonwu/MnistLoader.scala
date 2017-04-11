@@ -1,5 +1,6 @@
 package me.nelsonwu
 
+import org.nd4j.linalg.api.buffer.util.DataTypeUtil
 import org.nd4j.linalg.api.ndarray.INDArray
 
 /**
@@ -27,6 +28,8 @@ object MnistLoader {
       * @param baseDirectory the directory for the standard mnist images, file names are assumed
       */
     def getMnistImageData(baseDirectory: String): (IndexedSeq[Int], IndexedSeq[Int], IndexedSeq[INDArray], IndexedSeq[INDArray]) = {
+
+      DataTypeUtil.setDTypeForContext("double")
       val testLabels = readLabels(s"$baseDirectory/t10k-labels-idx1-ubyte.gz")
       val trainingLabels = readLabels(s"$baseDirectory/train-labels-idx1-ubyte.gz")
       val testImages = readImages(s"$baseDirectory/t10k-images-idx3-ubyte.gz")
@@ -40,6 +43,8 @@ object MnistLoader {
       * @return
       */
     def readLabels(filepath: String) = {
+
+      DataTypeUtil.setDTypeForContext("double")
       val g = gzipInputStream(filepath)
       val magicNumber = read32BitInt(g) //currently not used for anything, as assumptions are made
       val numberOfLabels = read32BitInt(g)
@@ -52,11 +57,13 @@ object MnistLoader {
       * @return
       */
     def readImages(filepath: String) = {
+
+      DataTypeUtil.setDTypeForContext("double")
       val g = gzipInputStream(filepath)
       val magicNumber = read32BitInt(g) //currently not used for anything, as assumptions are made
       val numberOfImages = read32BitInt(g)
       val imageSize = read32BitInt(g) * read32BitInt(g) //cols * rows
-      (1 to numberOfImages).map(_ => Nd4j.create((1 to imageSize).map(_ => g.read().toFloat).toArray))
+      (1 to numberOfImages).map(_ => Nd4j.create((1 to imageSize).map(_ => g.read().toDouble).toArray))
     }
 
   }
