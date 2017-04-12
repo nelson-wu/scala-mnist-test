@@ -60,8 +60,12 @@ class Network(sizes: Vector[Int]) {
       sizes.zip(sizes.tail)
         .map(tuple => Nd4j.randn(tuple._2, tuple._1))
     }
+   /* val weight1 = Array( Array(0.0, -1, 0), Array(1.0, 0, -1) )
+    val weight2 = Array( Array(1.0, 1), Array(0.0, 0) )
+    weights = IndexedSeq( Nd4j.create( weight1 ), Nd4j.create( weight2 ) )*/
 
     val dataSet = MnistLoader.MnistLoader.getMnistImageData(System.getProperty("user.dir"))
+    val inputArr = Nd4j.create( Array(1.0, 0.0, -1.0) )
     val trainingSet = (dataSet._4 zip dataSet._2)
     val testSet = (dataSet._3 zip dataSet._1)
 
@@ -74,7 +78,7 @@ class Network(sizes: Vector[Int]) {
       Random.shuffle(trainingSet)
         .grouped(miniBatchSize)
         .foreach {batch =>
-          System.out.println(s" Starting new batch in epoch $i.")
+          //System.out.println(s" Starting new batch in epoch $i.")
           val returnTuple = updateBatch(batch, weights.toIndexedSeq, biases.toIndexedSeq, eta)
           weights = returnTuple._1
           biases = returnTuple._2
@@ -110,7 +114,7 @@ class Network(sizes: Vector[Int]) {
       correctCount.toDouble / results.size.toDouble
 
     }
-  }
+}
 
   //var z = (weights.zip(biases)).map(a => applyWeightBias(inputImageVec, a._1, a._2))
 
@@ -173,6 +177,7 @@ class Network(sizes: Vector[Int]) {
       activations = activations ++ IndexedSeq(activation)
       //zs.append(z)
       zs = zs ++ IndexedSeq(z)
+      z = activation
     }
 
     val y = Nd4j.zeros(10, 1).putScalar(image._2, 1)
@@ -184,7 +189,7 @@ class Network(sizes: Vector[Int]) {
     deltaNabla_b = deltaNabla_b ++ IndexedSeq(delta)
 
     //deltaNabla_w.prepend(delta.mul(activations(activations.length - 1).transpose()))
-    deltaNabla_w = IndexedSeq(delta.mmul(activations(activations.length - 1).transpose())) ++ deltaNabla_w
+    deltaNabla_w = IndexedSeq(delta.mmul(activations(activations.length - 2).transpose())) ++ deltaNabla_w
 
     for (i <- 1.to(sizes.length - 2).reverse) {
       val z = zs(i)
