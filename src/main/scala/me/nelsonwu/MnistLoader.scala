@@ -5,6 +5,7 @@ import org.nd4j.linalg.api.ndarray.INDArray
 
 /**
   * Created by t-yowu on 4/5/2017.
+  * Source: https://github.com/clvcooke/mnist-reader-scala
   */
 object MnistLoader {
   import java.io.{BufferedInputStream, FileInputStream}
